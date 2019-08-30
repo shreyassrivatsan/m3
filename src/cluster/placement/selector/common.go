@@ -22,6 +22,7 @@ package selector
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/m3db/m3/src/cluster/placement"
 )
@@ -48,7 +49,9 @@ func getValidCandidates(
 			instances = append(instances, instanceInPlacement)
 		}
 	}
-
+	fmt.Printf("j>> %+v\n", candidates)
+	fmt.Printf("j>> %+v\n", instances)
+	fmt.Printf("j>> %+v\n", opts)
 	instances = filterZones(p, instances, opts)
 	if len(instances) == 0 {
 		return nil, errNoValidCandidateInstance
