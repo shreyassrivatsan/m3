@@ -163,6 +163,11 @@ func (s *m3storage) Fetch(
 		fetchResult.Metadata.Resolutions = resolutions
 	}
 
+	if options.IncludeExemplars {
+		fetchResult.Metadata.ExemplarsList = fetchResult.ExemplarsList
+		fetchResult.ExemplarsList = nil
+	}
+
 	return fetchResult, nil
 }
 

@@ -266,6 +266,7 @@ func filterNaNSeries(
 func renderResultsJSON(
 	w io.Writer,
 	series []*ts.Series,
+	exemplarsList ts.ExemplarsList,
 	params models.RequestParams,
 	keepNans bool,
 ) {

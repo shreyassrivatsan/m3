@@ -335,7 +335,7 @@ func TestIteratorToTsSeries(t *testing.T) {
 		enforcer := cost.NewMockChainedEnforcer(ctrl)
 		enforcer.EXPECT().Add(xcost.Cost(2)).Times(1)
 
-		dps, err := iteratorToTsSeries(mockIter, enforcer, models.NewTagOptions())
+		dps, _, err := iteratorToTsSeries(mockIter, enforcer, models.NewTagOptions())
 
 		assert.Nil(t, dps)
 		assert.EqualError(t, err, expectedErr.Error())

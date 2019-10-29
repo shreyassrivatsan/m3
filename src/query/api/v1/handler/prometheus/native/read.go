@@ -154,7 +154,7 @@ func (h *PromReadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		queryOpts.QueryContextOptions.RestrictFetchType = restrict
 	}
 
-	result, params, respErr := h.ServeHTTPWithEngine(w, r, h.engine, queryOpts, fetchOpts)
+	result, exemplarsList, params, respErr := h.ServeHTTPWithEngine(w, r, h.engine, queryOpts, fetchOpts)
 	if respErr != nil {
 		xhttp.Error(w, respErr.Err, respErr.Code)
 		return
@@ -171,7 +171,7 @@ func (h *PromReadHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.promReadMetrics.fetchSuccess.Inc(1)
 	timer.Stop()
 	// TODO: Support multiple result types
-	renderResultsJSON(w, result, params, h.keepNans)
+	renderResultsJSON(w, result, exemplarsList, params, h.keepNans)
 }
 
 // ServeHTTPWithEngine returns query results from the storage
@@ -181,7 +181,7 @@ func (h *PromReadHandler) ServeHTTPWithEngine(
 	engine executor.Engine,
 	opts *executor.QueryOptions,
 	fetchOpts *storage.FetchOptions,
-) ([]*ts.Series, models.RequestParams, *RespError) {
+) ([]*ts.Series, ts.ExemplarsList, models.RequestParams, *RespError) {
 	ctx := context.WithValue(r.Context(), handler.HeaderKey, r.Header)
 	logger := logging.WithContext(ctx, h.instrumentOpts)
 
@@ -189,7 +189,7 @@ func (h *PromReadHandler) ServeHTTPWithEngine(
 		h.timeoutOps, fetchOpts, h.instrumentOpts)
 	if rErr != nil {
 		h.promReadMetrics.fetchErrorsClient.Inc(1)
-		return nil, emptyReqParams, &RespError{Err: rErr.Inner(), Code: rErr.Code()}
+		return nil, nil, emptyReqParams, &RespError{Err: rErr.Inner(), Code: rErr.Code()}
 	}
 
 	if params.Debug {
@@ -198,7 +198,7 @@ func (h *PromReadHandler) ServeHTTPWithEngine(
 
 	if err := h.validateRequest(&params); err != nil {
 		h.promReadMetrics.fetchErrorsClient.Inc(1)
-		return nil, emptyReqParams, &RespError{Err: err, Code: http.StatusBadRequest}
+		return nil, nil, emptyReqParams, &RespError{Err: err, Code: http.StatusBadRequest}
 	}
 
 	result, err := read(ctx, engine, opts, fetchOpts, h.tagOpts,
@@ -209,7 +209,7 @@ func (h *PromReadHandler) ServeHTTPWithEngine(
 		opentracingext.Error.Set(sp, true)
 		logger.Error("unable to fetch data", zap.Error(err))
 		h.promReadMetrics.fetchErrorsServer.Inc(1)
-		return nil, emptyReqParams, &RespError{
+		return nil, nil, emptyReqParams, &RespError{
 			Err:  err,
 			Code: http.StatusInternalServerError,
 		}
@@ -218,7 +218,7 @@ func (h *PromReadHandler) ServeHTTPWithEngine(
 	// TODO: Support multiple result types
 	w.Header().Set("Content-Type", "application/json")
 	handler.AddWarningHeaders(w, result.meta)
-	return result.series, params, nil
+	return result.series, result.meta.ExemplarsList, params, nil
 }
 
 func (h *PromReadHandler) validateRequest(params *models.RequestParams) error {

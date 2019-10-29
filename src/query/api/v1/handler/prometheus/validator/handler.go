@@ -127,7 +127,7 @@ func (h *PromDebugHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			SetMetricsScope(h.instrumentOpts.MetricsScope().SubScope("debug_engine")))
 
 	engine := executor.NewEngine(engineOpts)
-	results, _, respErr := h.readHandler.ServeHTTPWithEngine(w, r, engine,
+	results, _, _, respErr := h.readHandler.ServeHTTPWithEngine(w, r, engine,
 		&executor.QueryOptions{}, fetchOpts)
 	if respErr != nil {
 		logger.Error("unable to read data", zap.Error(respErr.Err))
