@@ -68,7 +68,7 @@ type ResultMetadata struct {
 	Resolutions []int64
 	// ExemplarsList is a list of exemplars per datapoint per series obtained
 	// by this query.
-	ExemplarsList ts.ExemplarsList
+	ExemplarsList ts.SeriesExemplarList
 }
 
 // NewResultMetadata creates a new result metadata.
@@ -116,7 +116,7 @@ func combineWarnings(a, b Warnings) Warnings {
 	return nil
 }
 
-func combineExemplarsList(a, b ts.ExemplarsList) ts.ExemplarsList {
+func combineExemplarsList(a, b ts.SeriesExemplarList) ts.SeriesExemplarList {
 	if len(a) == 0 {
 		if len(b) != 0 {
 			return b
@@ -125,7 +125,7 @@ func combineExemplarsList(a, b ts.ExemplarsList) ts.ExemplarsList {
 		if len(b) == 0 {
 			return a
 		} else {
-			combined := make(ts.ExemplarsList, 0, len(a)+len(b))
+			combined := make(ts.SeriesExemplarList, 0, len(a)+len(b))
 			combined = append(combined, a...)
 			combined = append(combined, b...)
 			return combined

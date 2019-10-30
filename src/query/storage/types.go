@@ -457,9 +457,6 @@ type FetchResult struct {
 	SeriesList ts.SeriesList
 	// Metadata describes any metadata for the operation.
 	Metadata block.ResultMetadata
-	// ExemplarList is the list of decompressed exemplars after fetch query
-	// execution.
-	ExemplarsList ts.ExemplarsList
 }
 
 // MetricsType is a type of stored metrics.

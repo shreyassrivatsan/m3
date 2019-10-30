@@ -260,18 +260,18 @@ func iteratorToTsSeries(
 	iter encoding.SeriesIterator,
 	enforcer cost.ChainedEnforcer,
 	tagOptions models.TagOptions,
-) (*ts.Series, *ts.Exemplars, error) {
+) (*ts.Series, ts.SeriesExemplar, error) {
 	metric, err := FromM3IdentToMetric(iter.ID(), iter.Tags(), tagOptions)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	datapoints := make(ts.Datapoints, 0, initRawFetchAllocSize)
-	exemplars := make(ts.Exemplars, 0)
+	exemplars := make(ts.SeriesExemplar, 0)
 	for iter.Next() {
 		dp, _, annotation := iter.Current()
 		datapoints = append(datapoints, ts.Datapoint{Timestamp: dp.Timestamp, Value: dp.Value})
-		if annotation != nil {
+		if len(annotation) > 0 {
 			exemplars = append(exemplars, ts.Exemplar(annotation))
 		}
 	}
@@ -285,7 +285,7 @@ func iteratorToTsSeries(
 		return nil, nil, r.Error
 	}
 
-	return ts.NewSeries(metric.ID, datapoints, metric.Tags), &exemplars, nil
+	return ts.NewSeries(metric.ID, datapoints, metric.Tags), exemplars, nil
 }
 
 // Fall back to sequential decompression if unable to decompress concurrently
@@ -294,22 +294,32 @@ func decompressSequentially(
 	enforcer cost.ChainedEnforcer,
 	metadata block.ResultMetadata,
 	tagOptions models.TagOptions,
+	includeExemplars bool,
 ) (*FetchResult, error) {
 	seriesList := make([]*ts.Series, 0, len(iters))
-	exemplarList := make([]*ts.Exemplars, 0, len(iters))
+	var exemplarsList ts.SeriesExemplarList
+	if includeExemplars {
+		exemplarsList = make(ts.SeriesExemplarList, 0, len(iters))
+	}
+
 	for _, iter := range iters {
 		series, exemplars, err := iteratorToTsSeries(iter, enforcer, tagOptions)
 		if err != nil {
 			return nil, err
 		}
 		seriesList = append(seriesList, series)
-		exemplarList = append(exemplarList, exemplars)
+		if includeExemplars {
+			exemplarsList = append(exemplarsList, exemplars)
+		}
+	}
+
+	if includeExemplars {
+		metadata.ExemplarsList = exemplarsList
 	}
 
 	return &FetchResult{
-		SeriesList:    seriesList,
-		Metadata:      metadata,
-		ExemplarsList: exemplarList,
+		SeriesList: seriesList,
+		Metadata:   metadata,
 	}, nil
 }
 
@@ -319,9 +329,8 @@ func decompressConcurrently(
 	enforcer cost.ChainedEnforcer,
 	metadata block.ResultMetadata,
 	tagOptions models.TagOptions,
+	includeExemplars bool,
 ) (*FetchResult, error) {
-	seriesList := make([]*ts.Series, len(iters))
-	exemplarList := make([]*ts.Exemplars, len(iters))
 	errorCh := make(chan error, 1)
 	done := make(chan struct{})
 	stopped := func() bool {
@@ -331,6 +340,12 @@ func decompressConcurrently(
 		default:
 			return false
 		}
+	}
+
+	seriesList := make([]*ts.Series, len(iters))
+	var exemplarsList ts.SeriesExemplarList
+	if includeExemplars {
+		exemplarsList = make(ts.SeriesExemplarList, len(iters))
 	}
 
 	var wg sync.WaitGroup
@@ -354,7 +369,9 @@ func decompressConcurrently(
 				return
 			}
 			seriesList[i] = series
-			exemplarList[i] = exemplars
+			if includeExemplars {
+				exemplarsList[i] = exemplars
+			}
 		})
 	}
 
@@ -364,10 +381,13 @@ func decompressConcurrently(
 		return nil, err
 	}
 
+	if includeExemplars {
+		metadata.ExemplarsList = exemplarsList
+	}
+
 	return &FetchResult{
-		SeriesList:    seriesList,
-		Metadata:      metadata,
-		ExemplarsList: exemplarList,
+		SeriesList: seriesList,
+		Metadata:   metadata,
 	}, nil
 }
 
@@ -379,16 +399,20 @@ func SeriesIteratorsToFetchResult(
 	metadata block.ResultMetadata,
 	enforcer cost.ChainedEnforcer,
 	tagOptions models.TagOptions,
+	fetchOptions *FetchOptions,
 ) (*FetchResult, error) {
 	if cleanupSeriesIters {
 		defer seriesIterators.Close()
 	}
 
+	includeExemplars := fetchOptions != nil && fetchOptions.IncludeExemplars
+
 	iters := seriesIterators.Iters()
 	if readWorkerPool == nil {
-		return decompressSequentially(iters, enforcer, metadata, tagOptions)
+		return decompressSequentially(iters, enforcer,
+			metadata, tagOptions, includeExemplars)
 	}
 
 	return decompressConcurrently(iters, readWorkerPool,
-		enforcer, metadata, tagOptions)
+		enforcer, metadata, tagOptions, includeExemplars)
 }
