@@ -119,9 +119,9 @@ func PromSamplesToM3DatapointsAnnotated(samples []prompb.Sample) Datapoints {
 	for _, sample := range samples {
 		var buf bytes.Buffer
 		for _, label := range sample.Exemplar.Labels {
-			buf.WriteString(label.Name)
+			buf.Write(label.Name)
 			buf.WriteByte(':')
-			buf.WriteString(label.Value)
+			buf.Write(label.Value)
 		}
 		datapoints = append(datapoints,
 			Datapoint{
