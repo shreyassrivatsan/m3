@@ -117,11 +117,15 @@ func PromSamplesToM3Datapoints(samples []prompb.Sample) ts.Datapoints {
 func PromSamplesToM3DatapointsAnnotated(samples []prompb.Sample) Datapoints {
 	datapoints := make(Datapoints, 0, len(samples))
 	for _, sample := range samples {
-		var buf bytes.Buffer
-		for _, label := range sample.Exemplar.Labels {
-			buf.Write(label.Name)
-			buf.WriteByte(':')
-			buf.Write(label.Value)
+		var annotation []byte
+		if sample.Exemplar != nil {
+			var buf bytes.Buffer
+			for _, label := range sample.Exemplar.Labels {
+				buf.Write(label.Name)
+				buf.WriteByte(':')
+				buf.Write(label.Value)
+			}
+			annotation = buf.Bytes()
 		}
 		datapoints = append(datapoints,
 			Datapoint{
@@ -129,7 +133,7 @@ func PromSamplesToM3DatapointsAnnotated(samples []prompb.Sample) Datapoints {
 					Timestamp: PromTimestampToTime(sample.Timestamp),
 					Value:     sample.Value,
 				},
-				Annotation: buf.Bytes(),
+				Annotation: annotation,
 			},
 		)
 	}
