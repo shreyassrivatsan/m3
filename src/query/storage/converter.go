@@ -43,6 +43,16 @@ const (
 	initRawFetchAllocSize = 32
 )
 
+// Datapoint is a datapoint containing an annotation.
+type Datapoint struct {
+	ts.Datapoint
+
+	Annotation []byte
+}
+
+// Datapoints is a list of datapoints.
+type Datapoints []Datapoint
+
 // PromWriteTSToM3 converts a prometheus write query to an M3 one
 func PromWriteTSToM3(
 	timeseries *prompb.TimeSeries,
@@ -98,6 +108,30 @@ func PromSamplesToM3Datapoints(samples []prompb.Sample) ts.Datapoints {
 	for _, sample := range samples {
 		timestamp := PromTimestampToTime(sample.Timestamp)
 		datapoints = append(datapoints, ts.Datapoint{Timestamp: timestamp, Value: sample.Value})
+	}
+
+	return datapoints
+}
+
+// PromSamplesToM3DatapointsAnnotated converts Prometheus samples to M3 datapoints
+func PromSamplesToM3DatapointsAnnotated(samples []prompb.Sample) Datapoints {
+	datapoints := make(Datapoints, 0, len(samples))
+	for _, sample := range samples {
+		var buf bytes.Buffer
+		for _, label := range sample.Exemplar.Labels {
+			buf.WriteString(label.Name)
+			buf.WriteByte(':')
+			buf.WriteString(label.Value)
+		}
+		datapoints = append(datapoints,
+			Datapoint{
+				Datapoint: ts.Datapoint{
+					Timestamp: PromTimestampToTime(sample.Timestamp),
+					Value:     sample.Value,
+				},
+				Annotation: buf.Bytes(),
+			},
+		)
 	}
 
 	return datapoints
