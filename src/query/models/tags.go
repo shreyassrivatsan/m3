@@ -279,8 +279,8 @@ func (t Tags) Validate() error {
 
 			prev := tags.Tags[i-1]
 			if bytes.Compare(prev.Name, tag.Name) == 0 {
-				return fmt.Errorf("tags duplicate: '%s' appears more than once in '%s'",
-					tags.Tags[i-1].Name, t)
+				return fmt.Errorf("tags duplicate: '%s' appears more than once",
+					tags.Tags[i-1].Name)
 			}
 		}
 	} else {
