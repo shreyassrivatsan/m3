@@ -68,6 +68,11 @@ var defaultNewCheckedBytesFn = checked.NewBytes
 type encoder struct {
 	buf          *bytes.Buffer
 	checkedBytes checked.Bytes
+	numTags      uint16
+
+	customTag   []byte
+	customStart int
+	customEnd   int
 
 	opts TagEncoderOptions
 	pool TagEncoderPool
@@ -78,6 +83,15 @@ func newTagEncoder(
 	opts TagEncoderOptions,
 	pool TagEncoderPool,
 ) TagEncoder {
+	return newTagEncoderWithCustomTag(newFn, opts, pool, nil)
+}
+
+func newTagEncoderWithCustomTag(
+	newFn newCheckedBytesFn,
+	opts TagEncoderOptions,
+	pool TagEncoderPool,
+	customTag []byte,
+) TagEncoder {
 	b := make([]byte, 0, opts.InitialCapacity())
 	cb := newFn(nil, nil)
 	return &encoder{
@@ -85,6 +99,9 @@ func newTagEncoder(
 		checkedBytes: cb,
 		opts:         opts,
 		pool:         pool,
+		customStart:  -1,
+		customEnd:    -1,
+		customTag:    customTag,
 	}
 }
 
@@ -97,6 +114,7 @@ func (e *encoder) Encode(srcTags ident.TagIterator) error {
 	defer tags.Close()
 
 	numTags := tags.Remaining()
+	e.numTags = uint16(numTags)
 	max := int(e.opts.TagSerializationLimits().MaxNumberTags())
 	if numTags > max {
 		return fmt.Errorf("too many tags to encode (%d), limit is: %d", numTags, max)
@@ -138,6 +156,23 @@ func (e *encoder) Data() (checked.Bytes, bool) {
 	return e.checkedBytes, true
 }
 
+func (e *encoder) ResetCustomTag() {
+	if e.checkedBytes.NumRef() == 0 {
+		return
+	}
+	if e.customStart != -1 {
+		b := e.checkedBytes.Bytes()
+		b = append(b[:e.customStart], b[e.customEnd:]...)
+
+		// Also need to decrement the number of tags being encoded.
+		e.numTags--
+		numTags := encodeUInt16(e.numTags)
+		b[len(headerMagicBytes)] = numTags[0]
+		b[len(headerMagicBytes)+1] = numTags[1]
+		e.checkedBytes.Reset(b)
+	}
+}
+
 func (e *encoder) Reset() {
 	if e.checkedBytes.NumRef() == 0 {
 		return
@@ -145,6 +180,8 @@ func (e *encoder) Reset() {
 	e.buf.Reset()
 	e.checkedBytes.Reset(nil)
 	e.checkedBytes.DecRef()
+	e.customStart = -1
+	e.customEnd = -1
 }
 
 func (e *encoder) Finalize() {
@@ -157,6 +194,18 @@ func (e *encoder) Finalize() {
 }
 
 func (e *encoder) encodeTag(t ident.Tag) error {
+	// If this is the custom tag mark the start and end of the tag encoding,
+	// so that it maybe removed later.
+	var (
+		start     int
+		customTag bool
+	)
+	if len(e.customTag) > 0 &&
+		bytes.Equal(t.Name.Bytes(), e.customTag) {
+		start = e.buf.Len()
+		customTag = true
+	}
+
 	if len(t.Name.Bytes()) == 0 {
 		return errEmptyTagNameLiteral
 	}
@@ -165,7 +214,16 @@ func (e *encoder) encodeTag(t ident.Tag) error {
 		return err
 	}
 
-	return e.encodeID(t.Value)
+	if err := e.encodeID(t.Value); err != nil {
+		return err
+	}
+
+	// If this was the custom tag, then store its encoding information.
+	if customTag {
+		e.customStart = start
+		e.customEnd = e.buf.Len()
+	}
+	return nil
 }
 
 func (e *encoder) encodeID(i ident.ID) error {
