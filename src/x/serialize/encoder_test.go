@@ -119,66 +119,6 @@ func TestSimpleEncode(t *testing.T) {
 	require.Equal(t, "bar", string(b[20:23]))
 }
 
-func TestEncodeCustomTagReset(t *testing.T) {
-	e := newTagEncoderWithCustomTag(defaultNewCheckedBytesFn, newTestEncoderOpts(), nil, []byte("__m3_type__"))
-
-	tags := ident.NewTagsIterator(ident.NewTags(
-		ident.StringTag("abc", "defg"),
-		ident.StringTag("__m3_type__", "gauge"),
-		ident.StringTag("x", "bar"),
-	))
-	require.NoError(t, e.Encode(tags))
-
-	bc, ok := e.Data()
-	require.True(t, ok)
-	require.NotNil(t, bc)
-	b := bc.Bytes()
-	numExpectedBytes := 2 /* header */ + 2 /* num tags */ +
-		2 /* abc length */ + len("abc") +
-		2 /* defg length */ + len("defg") +
-		2 /* x length */ + len("__m3_type__") +
-		2 /* bar length */ + len("gauge") +
-		2 /* x length */ + len("x") +
-		2 /* bar length */ + len("bar")
-	require.Len(t, b, numExpectedBytes)
-	require.Equal(t, headerMagicBytes, b[:2])
-	require.Equal(t, encodeUInt16(3), b[2:4])
-	require.Equal(t, uint16(3), decodeUInt16(b[4:6])) /* len abc */
-	require.Equal(t, "abc", string(b[6:9]))
-	require.Equal(t, uint16(4), decodeUInt16(b[9:11])) /* len defg */
-	require.Equal(t, "defg", string(b[11:15]))
-	require.Equal(t, uint16(11), decodeUInt16(b[15:17])) /* len __m3_type__ */
-	require.Equal(t, "__m3_type__", string(b[17:28]))
-	require.Equal(t, uint16(5), decodeUInt16(b[28:30])) /* len gauge */
-	require.Equal(t, "gauge", string(b[30:35]))
-	require.Equal(t, uint16(1), decodeUInt16(b[35:37])) /* len x */
-	require.Equal(t, "x", string(b[37:38]))
-	require.Equal(t, uint16(3), decodeUInt16(b[38:40])) /* len bar */
-	require.Equal(t, "bar", string(b[40:43]))
-
-	e.ResetCustomTag()
-	bc, ok = e.Data()
-	require.True(t, ok)
-	require.NotNil(t, bc)
-	b = bc.Bytes()
-	numExpectedBytes = 2 /* header */ + 2 /* num tags */ +
-		2 /* abc length */ + len("abc") +
-		2 /* defg length */ + len("defg") +
-		2 /* x length */ + len("x") +
-		2 /* bar length */ + len("bar")
-	require.Len(t, b, numExpectedBytes)
-	require.Equal(t, headerMagicBytes, b[:2])
-	require.Equal(t, encodeUInt16(2), b[2:4])
-	require.Equal(t, uint16(3), decodeUInt16(b[4:6])) /* len abc */
-	require.Equal(t, "abc", string(b[6:9]))
-	require.Equal(t, uint16(4), decodeUInt16(b[9:11])) /* len defg */
-	require.Equal(t, "defg", string(b[11:15]))
-	require.Equal(t, uint16(1), decodeUInt16(b[15:17])) /* len x */
-	require.Equal(t, "x", string(b[17:18]))
-	require.Equal(t, uint16(3), decodeUInt16(b[18:20])) /* len bar */
-	require.Equal(t, "bar", string(b[20:23]))
-}
-
 func TestTagEncoderErrorEncoding(t *testing.T) {
 	opts := NewTagEncoderOptions()
 	e := newTagEncoder(defaultNewCheckedBytesFn, opts, nil)

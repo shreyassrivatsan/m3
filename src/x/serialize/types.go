@@ -45,9 +45,6 @@ type TagEncoder interface {
 	// TagEncoder.
 	Data() (checked.Bytes, bool)
 
-	// ResetCustomTag removes the custom tag from the completed byte encoding.
-	ResetCustomTag()
-
 	// Reset resets the internal state to allow reuse of the encoder.
 	Reset()
 
